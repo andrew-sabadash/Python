@@ -1,0 +1,83 @@
+import pandas as pd
+import numpy as np
+import psycopg2
+connection = psycopg2.connect(
+                             database=pg['db_name'],
+                             user=pg['db_user'],
+                             password=pg['db_password'],
+                             host=pg['db_host'],
+                             port=pg['db_port'],
+                             )
+def hours(data):
+        if data == 10:
+            return 9
+        else:
+            return data
+def fun(data):
+    hr = int(data)
+    mn = int((data - int(data))*60)
+    return f"{hr}:{mn}"
+query = "SELECT * FROM people"
+cursor.execute(query)         
+data = cursor.fetchall()         # Запросим все строки, мы получим результат в виде списка кортежей
+columns = []                     # В этот список будем сохранять названия колонок
+for head in cursor.description:
+    columns.append(head[0])
+
+raion = pd.DataFrame(data,columns = columns).fillna(0)
+raion.rename(columns = {'Всего часов.1':'Всего часов УЗ','Всего часов.2':'Всего часов МУ','Всего часов.3':'Всего часов район'}, inplace = True)
+raion['Всего часов УЗ'] = raion['Всего часов УЗ'].apply(hours)
+raion['Всего часов МУ'] = raion['Всего часов МУ'].apply(hours)
+raion['Всего часов район'] = raion['Всего часов район'].apply(hours)
+
+#--Создаем таблицу со средним временем нахождения дворников по районам--
+total = pd.DataFrame({'Район':'Общий итог',\
+                      'Всего часов район':raion['Всего часов район'].mean(),\
+                      'Всего часов МУ':raion['Всего часов МУ'].mean(),\
+                      'Всего часов УЗ':raion['Всего часов УЗ'].mean()}, index = [10]).round(2)
+nahozhdenie = raion.groupby('Район', as_index = False)\
+.agg({'Всего часов район':'mean','Всего часов МУ':'mean','Всего часов УЗ':'mean'}).round(2)
+nahozhdenie = pd.concat([nahozhdenie, total], axis = 0)
+nahozhdenie['% Район'] = (nahozhdenie['Всего часов район']/9).round(2)
+nahozhdenie['% МУ'] = (nahozhdenie['Всего часов МУ']/9).round(2)
+nahozhdenie['% УЗ'] = (nahozhdenie['Всего часов УЗ']/9).round(2)
+nahozhdenie_total= pd.DataFrame({'Район':nahozhdenie['Район'],\
+                                 'Всего часов район':nahozhdenie['Всего часов район'].apply(fun),\
+                                '% Район':nahozhdenie['% Район'],\
+                                 'Всего часов МУ':nahozhdenie['Всего часов МУ'].apply(fun),\
+                                 '% МУ':nahozhdenie['% МУ'],
+                                 'Всего часов УЗ':nahozhdenie['Всего часов УЗ'].apply(fun),\
+                                 '% УЗ':nahozhdenie['% УЗ'],
+                                })
+#--Создаем таблицу с нахождением дворников по районам менее 3 часов--
+less_3_1 = raion[(raion['Всего часов УЗ'] == 0)|\
+                  (raion['Всего часов УЗ'] == 1)|\
+                  (raion['Всего часов УЗ'] == 2)|\
+                  (raion['Всего часов УЗ'] == 3)]
+less_3_uz = less_3_1.groupby('Район', as_index = False).agg({'Логин':'count'})
+less_3_2 = raion[(raion['Всего часов МУ'] == 0)|\
+                  (raion['Всего часов МУ'] == 1)|\
+                  (raion['Всего часов МУ'] == 2)|\
+                  (raion['Всего часов МУ'] == 3)]
+less_3_mu = less_3_2.groupby('Район', as_index = False).agg({'Логин':'count'})
+#less_3_mu1 = less_3_mu.rename(columns = {'Район':'Район','Логин':'Логин1'}, inplace = True)
+less_3_3 = raion[(raion['Всего часов район'] == 0)|\
+                  (raion['Всего часов район'] == 1)|\
+                  (raion['Всего часов район'] == 2)|\
+                  (raion['Всего часов район'] == 3)]
+less_3_raion = less_3_3.groupby('Район', as_index = False).agg({'Логин':'count'})
+
+less = pd.merge(less_3_uz, less_3_mu,
+                 how = 'outer', left_on = 'Район', right_on = 'Район')
+less_3 = pd.merge(less, less_3_raion,
+                 how = 'outer', left_on = 'Район', right_on = 'Район')
+total = pd.DataFrame({'Район':'Общий итог',\
+                     'Логин':less_3_uz['Логин'].sum(),\
+                     'Логин2':less_3_mu['Логин'].sum(),\
+                     'Логин3':less_3_raion['Логин'].sum()},\
+                    index =[11])
+less_3 = pd.concat([total,less_3], axis = 0)
+#-- Выгружаем в Excel--
+writer = pd.ExcelWriter('Сводная нахождение_районы.xlsx')
+nahozhdenie_total.to_excel(writer, sheet_name='слайд 1')
+less_3.to_excel(writer, sheet_name='слайд 2')
