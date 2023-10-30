@@ -1,0 +1,162 @@
+import pandas as pd
+import numpy as np
+import psycopg2
+connection = psycopg2.connect(
+                             database=pg['db_name'],
+                             user=pg['db_user'],
+                             password=pg['db_password'],
+                             host=pg['db_host'],
+                             port=pg['db_port'],
+                             )
+def hours(data):
+        if data == 10:
+            return 9
+        else:
+            return data"
+query = "SELECT * FROM members"
+cursor.execute(query)         
+data = cursor.fetchall()         # Запросим все строки, мы получим результат в виде списка кортежей
+columns = []                     # В этот список будем сохранять названия колонок
+for head in cursor.description:
+    columns.append(head[0])
+
+raion = pd.DataFrame(data,columns = columns).fillna(0)
+raion.rename(columns = {'Всего часов.1':'Всего часов УЗ','Всего часов.2':'Всего часов МУ','Всего часов.3':'Всего часов район'}, inplace = True)
+raion['Всего часов УЗ'] = raion['Всего часов УЗ'].apply(hours)
+raion['Всего часов МУ'] = raion['Всего часов МУ'].apply(hours)
+raion['Всего часов район'] = raion['Всего часов район'].apply(hours)
+raion2 = raion.drop_duplicates(subset = 'Логин')
+raion2.head(1)
+
+# --Делаем расчет нахождения начальников участков по часам--
+nachalnik_mu = raion2.loc[raion['Должность'] == 'Начальник участка']
+nachalnik_mu_sistema = nachalnik_mu.groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'Кол-во в системе'})
+# Нахождение на МУ
+nachalnik_mu_4and_more = nachalnik_mu.loc[nachalnik_mu['Всего часов МУ'] >= 4].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_более 4'})
+nachalnik_mu_1_3 = nachalnik_mu.loc[(nachalnik_mu['Всего часов МУ'] >= 1)&(nachalnik_mu['Всего часов МУ'] <= 3)].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_1-3'})
+
+nachalnik_mu_0 = nachalnik_mu.loc[nachalnik_mu['Всего часов МУ'] == 0].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_менее 1'})
+
+# Нахождение на районе
+nachalnik_raion_4and_more = nachalnik_mu.loc[nachalnik_mu['Всего часов район'] >= 4].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_более 4'})
+    
+nachalnik_raion_1_3 = nachalnik_mu.loc[(nachalnik_mu['Всего часов район'] >= 1)&(nachalnik_mu['Всего часов район'] <= 3)].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_1-3'}) 
+
+nachalnik_raion_0 = nachalnik_mu.loc[nachalnik_mu['Всего часов район'] == 0].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_менее 1'}) 
+nachalnik_t =  pd.merge(nachalnik_mu_sistema, nachalnik_mu_0, # создадим новый датафрейм c ВПР всего в системе и менее часа
+         how='outer',                      
+         left_on='Район', right_on='Район')
+nachalnik_t2 =  pd.merge(nachalnik_t, nachalnik_raion_0,
+         how='outer',                      
+         left_on='Район', right_on='Район') 
+nachalnik_t3 =  pd.merge(nachalnik_t2, nachalnik_mu_1_3,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+nachalnik_t4 =  pd.merge(nachalnik_t3, nachalnik_raion_1_3,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+nachalnik_t5 =  pd.merge(nachalnik_t4, nachalnik_mu_4and_more,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+nachalnik_t6 =  pd.merge(nachalnik_t5, nachalnik_raion_4and_more,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+nachalnik_t6
+
+# --Делаем расчет нахождения мастеров по часам--
+master = raion2.loc[raion['Должность'] == 'Мастер участка']
+master_sistema = master.groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'Кол-во в системе'})
+# Нахождение на МУ
+master_mu_4and_more = master.loc[master['Всего часов МУ'] >= 4].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_более 4'})
+master_mu_1_3 = master.loc[(master['Всего часов МУ'] >= 1)&(master['Всего часов МУ'] <= 3)].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_1-3'})
+master_mu_0 = master.loc[master['Всего часов МУ'] == 0].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_менее 1'})
+
+# Нахождение на районе
+master_raion_4and_more = master.loc[master['Всего часов район'] >= 4].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_более 4'})
+    
+master_raion_1_3 = master.loc[(master['Всего часов район'] >= 1)&(master['Всего часов район'] <= 3)].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_1-3'}) 
+
+master_raion_0 = master.loc[master['Всего часов район'] == 0].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_менее 1'})
+  
+master_t =  pd.merge(master_sistema, master_mu_0, # создадим новый датафрейм c ВПР всего в системе и менее часа
+         how='outer',                      
+         left_on='Район', right_on='Район')
+master_t2 =  pd.merge(master_t, master_raion_0,
+         how='outer',                      
+         left_on='Район', right_on='Район') 
+master_t3 =  pd.merge(master_t2, master_mu_1_3,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+master_t4 =  pd.merge(master_t3, master_raion_1_3,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+master_t5 =  pd.merge(master_t4, master_mu_4and_more,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+master_t6 =  pd.merge(master_t5, master_raion_4and_more,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+master_t6
+
+# --Делаем расчет нахождения техников участков по часам--
+tech = raion2.loc[raion['Должность'] == 'Техник участка']
+tech_sistema = tech.groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'Кол-во в системе'})
+# Нахождение на МУ
+tech_mu_4and_more = tech.loc[tech['Всего часов МУ'] >= 4].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_более 4'})
+tech_mu_1_3 = tech.loc[(tech['Всего часов МУ'] >= 1)&(tech['Всего часов МУ'] <= 3)].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_1-3'})
+tech_mu_0 = tech.loc[tech['Всего часов МУ'] == 0].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'МУ_менее 1'})
+
+# Нахождение на районе
+tech_raion_4and_more = tech.loc[tech['Всего часов район'] >= 4].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_более 4'})
+    
+tech_raion_1_3 = tech.loc[(tech['Всего часов район'] >= 1)&(tech['Всего часов район'] <= 3)].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_1-3'}) 
+
+tech_raion_0 = tech.loc[tech['Всего часов район'] == 0].groupby\
+('Район', as_index = False).agg({'Логин':'count'}).rename(columns = {'Логин':'район_менее 1'})
+    
+tech_t =  pd.merge(tech_sistema, tech_mu_0, # создадим новый датафрейм c ВПР всего в системе и менее часа
+         how='outer',                      
+         left_on='Район', right_on='Район')
+tech_t2 =  pd.merge(tech_t,tech_raion_0,
+         how='outer',                      
+         left_on='Район', right_on='Район') 
+tech_t3 =  pd.merge(tech_t2, tech_mu_1_3,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+tech_t4 =  pd.merge(tech_t3, tech_raion_1_3,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+tech_t5 =  pd.merge(tech_t4, tech_mu_4and_more,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+tech_t6 =  pd.merge(tech_t5, tech_raion_4and_more,
+         how='outer',                      
+         left_on='Район', right_on='Район')
+tech_t6
+# --Выгружаем в Excel--
+writer = pd.ExcelWriter('Нахождение начальников таблицы МУ, район.xlsx')
+
+nachalnik_t6.to_excel(writer, sheet_name='Начальник на МУ и районе')
+master_t6.to_excel(writer, sheet_name='Мастер на МУ и районе')
+tech_t6.to_excel(writer, sheet_name='Техник на МУ и районе')
+writer.save()
