@@ -18,6 +18,7 @@ def fun(data):
     mn = int((data - int(data))*60)
     return f"{hr}:{mn}"
 query = "SELECT * FROM people"
+cursor = connection.cursor()
 cursor.execute(query)         
 data = cursor.fetchall()         # Запросим все строки, мы получим результат в виде списка кортежей
 columns = []                     # В этот список будем сохранять названия колонок
